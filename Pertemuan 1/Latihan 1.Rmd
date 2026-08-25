@@ -1,6 +1,0 @@
-## Latihan MPDW
-
-```{r}
-x = 3
-x
-```
