@@ -770,8 +770,8 @@ akurasi_train.sma</code></pre>
 ## MSE      356.16918
 ## MAPE      19.64275</code></pre>
 <p>Dalam hal ini nilai MAPE data latih pada metode pemulusan SMA sekitar
-2%, nilai ini dapat dikategorikan sebagai nilai akurasi yang sangat
-baik. Selanjutnya dilakukan perhitungan nilai MAPE data uji pada metode
+19,64%, nilai ini dapat dikategorikan sebagai nilai akurasi yang baik.
+Selanjutnya dilakukan perhitungan nilai MAPE data uji pada metode
 pemulusan SMA.</p>
 <pre class="r"><code>#Menghitung nilai keakuratan data uji
 error_test.sma = test_ma.ts-data.gab[97:120,3]</code></pre>
@@ -790,8 +790,8 @@ akurasi_test.sma</code></pre>
 ## MSE      409.04641
 ## MAPE      19.53053</code></pre>
 <p>Perhitungan akurasi menggunakan data latih menghasilkan nilai MAPE
-yang kurang dari 10% sehingga nilai akurasi ini dapat dikategorikan
-sebagai sangat baik.</p>
+sebesar 19,53%. Berdasarkan nilai tersebut, hasil peramalan dapat
+dikategorikan memiliki tingkat akurasi yang baik.</p>
 </div>
 <div id="double-moving-average-dma" class="section level3">
 <h3>Double Moving Average (DMA)</h3>
@@ -1043,9 +1043,9 @@ akurasi_train.dma</code></pre>
 ## MSE      454.20954
 ## MAPE      22.14667</code></pre>
 <p>Perhitungan akurasi pada data latih menggunakan nilai MAPE
-menghasilkan nilai MAPE yang kurang dari 10% sehingga dikategorikan
-sangat baik. Selanjutnya, perhitungan nilai akurasi dilakukan pada data
-uji.</p>
+menghasilkan nilai MAPE yang lebih dari 10% (22,15%) sehingga
+dikategorikan baik. Selanjutnya, perhitungan nilai akurasi dilakukan
+pada data uji.</p>
 <pre class="r"><code>#Menghitung nilai keakuratan data uji
 error_test.dma = test_ma.ts-data.gab2[97:120,6]</code></pre>
 <pre><code>## Warning in `-.default`(test_ma.ts, data.gab2[97:120, 6]): longer object length
@@ -1063,11 +1063,10 @@ akurasi_test.dma</code></pre>
 ## MSE      619.90624
 ## MAPE      24.77482</code></pre>
 <p>Perhitungan akurasi menggunakan data latih menghasilkan nilai MAPE
-yang kurang dari 10% sehingga nilai akurasi ini dapat dikategorikan
-sebagai sangat baik.</p>
-<p>Pada data latih, metode SMA lebih baik dibandingkan dengan metode
-DMA, sedangkan pada data uji, metode DMA lebih baik dibandingkan
-SMA.</p>
+yang lebih dari 10% (24,78%) sehingga nilai akurasi ini dapat
+dikategorikan sebagai baik.</p>
+<p>Pada data latih maupun data uji, metode SMA lebih baik dibandingkan
+dengan metode DMA.</p>
 </div>
 </div>
 <div id="single-exponential-smoothing-double-exponential-smoothing" class="section level2">
@@ -2524,6 +2523,15 @@ akurasi_testing2</code></pre>
 <pre><code>##            Model      SSE       MSE
 ## 1         Model2 16458.38  514.3243
 ## 2 Model2 Optimal 43739.80 1366.8689</code></pre>
+<p>Berdasarkan hasil akurasi data uji, Model 2 menghasilkan kinerja yang
+lebih baik dibandingkan Model 1. Hal ini ditunjukkan oleh nilai MSE
+Model 2 sebesar 514,3243 yang lebih kecil dibandingkan Model 1 sebesar
+652,1631. Oleh karena itu, Model 2 dipilih sebagai model terbaik karena
+menghasilkan kesalahan peramalan yang lebih kecil.</p>
+<p>#Kesimpulan</p>
+<p>Berdasarkan hasil perbandingan akurasi pada data uji, metode SES
+merupakan metode terbaik karena menghasilkan nilai kesalahan peramalan
+paling kecil dibandingkan metode lainnya.</p>
 </div>
 </div>
 </div>
