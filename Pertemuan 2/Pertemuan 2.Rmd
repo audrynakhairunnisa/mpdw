@@ -1,9 +1,13 @@
 ---
 title: "Pertemuan 2"
+author: "Audryna Khairunnisa Wibisono (M0401241012)"
 output:
-  html_document: default
-  pdf_document: default
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
   word_document: default
+  pdf_document: default
 ---
 
 # Pemanggilan Packages
