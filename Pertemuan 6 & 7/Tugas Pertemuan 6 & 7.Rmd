@@ -1,1 +1,417 @@
+---
+title: "Tugas Pertemuan 6 & 7: Pemodelan ARIMA - Pendugaan Parameter, Diagnostik Model, dan Peramalan"
+author: "Audryna Khairunnisa Wibisono"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+# Packages
+```{r}
+library(ggplot2)
+library(tseries)
+library(MASS)
+library(forecast)
+library(TSA)
+library(TTR)
+library(aTSA)
+library(graphics)
+library(readxl)
+library(tsibble)
+```
+
+# Data
+```{r}
+library(readxl)
+data <- read_excel("Air Quality Historical (Data Individu).xlsx")
+data
+```
+
+```{r}
+data.ts <- ts(data$`PM2.5 (ug/m3)`)
+
+n_total <- length(data.ts)
+n_train <- round(0.8 * n_total) # 125
+
+train.ts <- data.ts[1:n_train]
+test.ts  <- data.ts[(n_train + 1):n_total]
+
+train.ts <- ts(train.ts)
+test.ts  <- ts(test.ts)
+```
+
+
+
+# Eksplorasi Data
+
+## Plot Data Penuh
+
+```{r}
+plot.ts(data.ts,
+        col = "navyblue",
+        lty = 1,
+        xlab = "Waktu (Hari)",
+        ylab = "PM2.5 (ug/m3)",
+        main = "Plot Deret Waktu Konsentrasi PM2.5")
+```
+
+Berdasarkan plot data deret waktu di atas, terlihat bahwa data cenderung **stasioner dalam rataan** karena bergerak di sekitar nilai tengahnya tanpa tren naik/turun yang jelas. Data juga **stasioner dalam ragam** karena lebar pitanya relatif seragam. Berdasarkan pola tersebut, pembagian data latih dan data uji ditetapkan dengan proporsi **80%:20%** (125 data latih dan 31 data uji).
+
+## Plot Data Latih
+
+```{r}
+plot.ts(train.ts,
+        col = "navyblue",
+        lty = 1,
+        xlab = "Waktu (Hari)",
+        ylab = "PM2.5 (ug/m3)",
+        main = "Plot PM2.5 Data Latih")
+```
+
+Berdasarkan plot data deret waktu pada data latih, terlihat bahwa data berfluktuasi secara konstan di sekitar nilai tengahnya tanpa menunjukkan adanya tren naik atau turun yang signifikan. Hal ini mengindikasikan bahwa data latih cenderung stasioner dalam rataan.
+
+## Plot Data Uji
+
+```{r}
+plot.ts(test.ts,
+        col = "navyblue",
+        lty = 1,
+        xlab = "Waktu (Hari)",
+        ylab = "PM2.5 (ug/m3)",
+        main = "Plot PM2.5 Data Uji")
+```
+
+# Uji Stasioneritas Data
+
+## Plot ACF
+
+```{r}
+acf(train.ts)
+```
+
+Berdasarkan plot ACF, terlihat bahwa nilai autokorelasi menurun secara bertahap (*tails off*) seiring bertambahnya lag dan semakin mendekati nol setelah lag awal. Hal ini menandakan bahwa data stasioner dalam rataan.
+
+## Uji ADF
+
+```{r}
+tseries::adf.test(train.ts)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak $H_0$. Hal ini menandakan bahwa data stasioner dalam rataan sehingga tidak memerlukan proses differencing ($d = 0$).
+
+## Plot Box-Cox
+
+```{r}
+# Membuat indeks urutan waktu sesuai panjang data latih
+index <- seq(1:length(train.ts))
+
+# Uji Box-Cox
+bc <- boxcox(train.ts ~ index, lambda = seq(-1, 2, by = 0.1))
+
+# Nilai lambda optimum
+lambda_opt <- bc$x[which.max(bc$y)]
+lambda_opt
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, df = 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+Berdasarkan plot Box-Cox, diperoleh nilai lambda optimum sekitar 0,9–1,0 dengan selang kepercayaan 95% yang mencakup nilai 1. Karena nilai 1 berada dalam selang kepercayaan, data dapat dianggap stasioner dalam ragam sehingga tidak diperlukan transformasi Box-Cox.
+
+
+# Identifikasi Model
+
+### Plot ACF
+
+```{r}
+acf(train.ts)
+```
+
+Berdasarkan plot ACF, terlihat bahwa nilai autokorelasi menurun secara bertahap (*tails off*) seiring bertambahnya lag dan semakin mendekati nol setelah lag awal. Hal ini menandakan bahwa data stasioner dalam rataan.
+
+
+## Plot PACF
+
+```{r}
+pacf(train.ts)
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot PACF cenderung *cuts off* pada lag ke 1, sehingga jika plot ACF dianggap *tails off*, maka model tentatifnya adalah ARIMA(1,0,0).
+
+Jika baik plot ACF maupun plot PACF keduanya dianggap tails of, maka model yang terbentuk adalah ARIMA(1,0,1)
+
+## Plot EACF
+
+```{r}
+eacf(train.ts)
+```
+
+Identifikasi model menggunakan plot EACF dilakukan dengan melihat ujung
+segitiga pada pola segitiga nol. Dalam hal ini model tentatif yang
+terbentuk adalah ARIMA(1,0,0), ARIMA(2,0,1), ARIMA(3,0,2), ARIMA(4,0,3), dan ARIMA(0,0,4).
+
+# Pendugaan Parameter Model Tentatif
+
+## ARIMA(1,0,0)
+
+```{r}
+model1.pm25=Arima(train.ts, order=c(1,0,0),method="ML")
+summary(model1.pm25) #AIC=1042.96 
+lmtest::coeftest(model1.pm25) #seluruh parameter signifikan
+```
+
+## ARIMA(2,0,1)
+
+```{r}
+model2.pm25=Arima(train.ts, order=c(2,0,1),method="ML")
+summary(model2.pm25) #AIC=1046.86
+lmtest::coeftest(model2.pm25) #terdapat parameter tidak signifikan
+```
+
+## ARIMA(3,0,2)
+
+```{r}
+model3.pm25=Arima(train.ts, order=c(3,0,2),method="ML")
+summary(model3.pm25) #AIC=1044.75
+lmtest::coeftest(model3.pm25) #terdapat parameter tidak signifikan
+```
+
+## ARIMA(4,0,3)
+
+```{r}
+model4.pm25=Arima(train.ts, order=c(4,0,3),method="ML")
+summary(model4.pm25) #AIC=1049.05
+lmtest::coeftest(model4.pm25) #terdapat parameter tidak signifikan
+```
+
+## ARIMA(0,0,4)
+
+```{r}
+model5.pm25=Arima(train.ts, order=c(0,0,4),method="ML")
+summary(model5.pm25) #AIC=1051.55   
+lmtest::coeftest(model5.pm25) #terdapat parameter tidak signifikan
+```
+
+## Ringkasan AIC
+
+```{r}
+model_tentatif <- data.frame(
+  Model = c("ARIMA(1,0,0)",
+            "ARIMA(2,0,1)",
+            "ARIMA(3,0,2)",
+            "ARIMA(4,0,3)",
+            "ARIMA(0,0,4)"),
+  AIC = c(
+    AIC(model1.pm25),
+    AIC(model2.pm25),
+    AIC(model3.pm25),
+    AIC(model4.pm25),
+    AIC(model5.pm25)
+  ),
+  BIC = c(
+    BIC(model1.pm25),
+    BIC(model2.pm25),
+    BIC(model3.pm25),
+    BIC(model4.pm25),
+    BIC(model5.pm25)
+  )
+)
+
+model_tentatif
+```
+
+Berdasarkan pendugaan parameter di atas, nilai AIC terkecil dimiliki
+oleh model ARIMA(1,0,0) dan parameter model ARIMA(1,0,0) juga seluruhnya
+signifikan sehingga model yang dipilih adalah model ARIMA(1,0,0).
+
+# Analisis Sisaan
+
+Model terbaik hasil identifikasi kemudian dicek asumsi sisaannya. Sisaan
+model ARIMA harus memenuhi asumsi normalitas, kebebasan sisaan, dan
+kehomogenan ragam. Diagnostik model dilakukan secara eksplorasi dan uji
+formal.
+
+## Eksplorasi Sisaan
+
+```{r}
+# Ambil sisaan/residual dari model terbaik
+sisaan.pm25 <- model1.pm25$residuals
+
+# Pengaturan grid plot 2x2
+par(mfrow = c(2,2),    
+    mar = c(4,4,2,1),  
+    oma = c(0,0,2,0))  
+
+# 1. Q-Q Plot
+qqnorm(sisaan.pm25, main = "Normal Q-Q Plot")
+qqline(sisaan.pm25, col = "blue", lwd = 2)
+
+# 2. Plot Sisaan vs Waktu
+plot(sisaan.pm25, type = "o", col = "navyblue",
+     main = "Plot Sisaan vs Waktu",
+     xlab = "Waktu", ylab = "Sisaan")
+
+# 3. ACF Sisaan
+acf(sisaan.pm25, main = "ACF Sisaan")
+
+# 4. PACF Sisaan
+pacf(sisaan.pm25, main = "PACF Sisaan")
+
+# Mengembalikan layout plot ke 1x1
+par(mfrow = c(1,1))
+
+```
+
+Berdasarkan plot kuantil-kuantil normal (Normal Q-Q Plot), secara eksploratif terlihat bahwa sisaan menyebar normal karena titik-titik cenderung mengikuti garis lurus diagonal $45^\circ$. Selain itu, pada Plot Sisaan vs Waktu, lebar pita sebaran sisaan tampak cenderung seragam (konstan) di sekitar nilai nol, yang mengindikasikan adanya homogenitas ragam (homoskedastisitas). Sementara itu, plot ACF dan PACF sisaan dari model ARIMA(1,0,0) menunjukkan tidak adanya spike signifikan yang keluar dari garis batas putus-putus biru, mengindikasikan bahwa tidak ada autokorelasi pada sisaan (sisaan saling bebas). Kondisi ini akan diuji lebih lanjut dengan uji formal.
+
+## Uji Formal
+
+```{r}
+# 1) Uji Normalitas Sisaan (Kolmogorov-Smirnov Test)
+ks.test(sisaan.pm25, "pnorm", mean(sisaan.pm25), sd(sisaan.pm25))
+```
+
+Selain dengan eksplorasi, asumsi tersebut dapat diuji menggunakan uji
+formal. Pada tahapan ini uji formal yang digunakan untuk normalitas
+adalah uji Kolmogorov-Smirnov (KS). Hipotesis pada uji KS adalah sebagai
+berikut.
+
+$H_0$ : Sisaan menyebar normal
+
+$H_1$ : Sisaan tidak menyebar normal
+
+Berdasarkan uji KS tersebut, didapat *p-value* sebesar 0.8851 yang lebih besar dari taraf nyata 5% sehingga gagal tolak $H_0$ dan menandakan bahwa sisaan menyebar normal. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot kuantil-kuantil normal.
+
+```{r}
+#2) Sisaan saling bebas/tidak ada autokorelasi 
+Box.test(sisaan.pm25, type = "Ljung-Box")
+```
+
+Selanjutnya akan dilakukan uji formal untuk kebebasan sisaan menggunakan
+uji Ljung-Box. Hipotesis yang digunakan adalah sebagai berikut.
+
+$H_0$ : Sisaan saling bebas
+
+$H_1$ : Sisaan tidak tidak saling bebas
+
+Berdasarkan uji Ljung-Box tersebut, didapat *p-value* sebesar 0.8803 yang lebih besar dari taraf nyata 5% sehingga gagal tolak $H_0$ dan
+menandakan bahwa sisaan saling bebas. Hal ini sesuai dengan eksplorasi pada plot ACF dan PACF.
+
+```{r}
+#3) Sisaan homogen 
+Box.test((sisaan.pm25)^2, type = "Ljung-Box")
+```
+
+Hipotesis yang digunakan untuk uji kehomogenan ragam adalah sebagai
+berikut.
+
+$H_0$ : Ragam sisaan homogen
+
+$H_1$ : Ragam sisaan tidak homogen
+
+Berdasarkan uji Ljung-Box terhadap sisaan kuadrat tersebut, didapat *p-value* sebesar 0.49246 yang lebih besar dari taraf nyata 5% sehingga gagal tolak $H_0$ dan menandakan bahwa ragam sisaan homogen.
+
+```{r}
+#4) Nilai tengah sisaan sama dengan nol 
+t.test(sisaan.pm25, mu = 0, conf.level = 0.95)
+```
+
+Terakhir, dengan uji-t, akan dicek apakah nilai tengah sisaan sama
+dengan nol. Hipotesis yang diujikan sebagai berikut.
+
+$H_0$ : nilai tengah sisaan sama dengan 0
+
+$H_1$ : nilai tengah sisaan tidak sama dengan 0
+
+Berdasarkan uji-ttersebut, didapat *p-value* sebesar 0.8756 yang lebih besar dari taraf nyata 5% sehingga gagal tolak $H_0$ dan menandakan bahwa nilai tengah sisaan sama dengan nol. Hal ini sesuai dengan
+eksplorasi.
+
+# Overfitting
+
+Tahapan selanjutnya adalah *overfitting*, yang dilakukan dengan menaikkan orde $AR(p)$ dan $MA(q)$ satu tingkat dari model terpilih ARIMA(1,0,0) untuk memastikan apakah terdapat model lain yang lebih baik. Kandidat model *overfitting* yang diuji adalah ARIMA(2,0,0) dan ARIMA(1,0,1).
+Karena parameter tambahan pada kedua model hasil *overfitting* tidak signifikan serta menghasilkan nilai AIC/BIC yang lebih besar daripada model awal, maka model ARIMA(1,0,0) tetap dipilih sebagai model terbaik (parsimonious model) untuk dilanjutkan ke tahap peramalan.
+
+# Model Terbaik : ARIMA(1,0,0)
+
+```{r}
+model_terbaik <- Arima(train.ts, order = c(1,0,0), method = "ML")
+summary(model_terbaik)
+lmtest::coeftest(model_terbaik)
+```
+
+# Peramalan
+
+Peramalan dilakukan menggunakan fungsi `forecast()` . Peramalan dilakukan untuk 31 hari ke depan, menyesuaikan dengan jumlah observasi pada data uji (test.ts) untuk kebutuhan evaluasi akurasi model.
+
+```{r}
+# ---FORECAST---
+ramalan.pm25 <- forecast::forecast(model_terbaik, h = length(test.ts))
+ramalan.pm25
+```
+
+```{r}
+# Mengambil nilai rata-rata poin peramalan (point forecast)
+data.ramalan <- ramalan.pm25$mean
+
+# Plot hasil peramalan beserta selang kepercayaan 80% dan 95%
+plot(ramalan.pm25, 
+     main = "Plot Hasil Peramalan PM2.5 dengan ARIMA(1,0,0)",
+     xlab = "Waktu (Hari)", 
+     ylab = "PM2.5 (ug/m3)",
+     col = "navyblue")
+```
+
+```{r}
+# Bandingkan aktual vs forecast
+perbandingan.pm25 <- data.frame(
+  Aktual   = as.numeric(test.ts),
+  Forecast = as.numeric(data.ramalan)
+)
+
+print(perbandingan.pm25)   
+```
+
+```{r}
+# Hitung akurasi peramalan
+akurasi_test <- accuracy(as.numeric(data.ramalan), as.numeric(test.ts))
+akurasi_test
+```
+
+
+```{r}
+# 1. Plot seluruh data aktual (PM2.5)
+plot(1:n_total, data.ts, type = "l", col = "black", lty = 1,
+     xlab = "Waktu (Hari)", ylab = "PM2.5 (ug/m3)",
+     main = "Plot Perbandingan Data Aktual vs Hasil Forecast PM2.5")
+
+# 2. Garis hasil forecast (Dimulai dari indeks 126 sampai 156)
+start_test <- n_train + 1  # 126
+end_test   <- n_total      # 156
+
+lines(start_test:end_test, data.ramalan, col = "blue", lty = 2, lwd = 2)
+
+legend("topright", 
+       legend = c("Data Aktual", "Forecast ARIMA"),
+       col = c("black", "blue"),
+       lty = c(1, 2), 
+       lwd = c(1, 2), 
+       bty = "n")
+
+```
 
